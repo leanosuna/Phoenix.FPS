@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Phoenix.Framework" Version="1.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Content\ContentBin\**" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Content\asset-manifest.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+
+  <Target Name="Phoenix-AssetTool-Build" BeforeTargets="BeforeBuild">
+    <Exec Command="dotnet pat Content/asset-manifest.json build" StandardOutputImportance="high" />
+  </Target>
+</Project>
