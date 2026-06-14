@@ -23,6 +23,8 @@ namespace Phoenix.FPS.Server
                 }
                 
             }
+
+            Server.RiptideServer.SendToAll(message);
         }
     }
 }

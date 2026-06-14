@@ -32,7 +32,8 @@ namespace Phoenix.FPS.Client.Network
         {
             Console.WriteLine("dc");
             Console.WriteLine(e.Reason);
-            Console.WriteLine(e.Message.GetString());
+            if(e.Message is not null)
+                Console.WriteLine(e.Message.GetString());
 
             //m.get
         }

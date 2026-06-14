@@ -53,8 +53,9 @@ class Server
     
     static void UpdateTick()
     {
-        
-       
+        MessagesOut.BroadcastPlayerData();
+
+
     }
 
     static void UpdateOneSec()
@@ -73,7 +74,7 @@ class Server
             var mIn = m.UnreliableIn;
             var mOut = m.UnreliableOut;
 
-            var status = p!.Connected ? $"{p.FPS} fps, {c.RTT} ms, {mIn}/{mOut}": "offline";
+            var status = p!.Connected ? $"{p.FPS} fps, {c.RTT} ms, packets in {mIn} out {mOut}": "offline";
             Log.Info($"[{p!.ID}] ({c.Id}) {status}",true);
 
             m.Reset();
