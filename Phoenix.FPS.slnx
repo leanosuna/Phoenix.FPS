@@ -1,4 +1,8 @@
 <Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+  </Folder>
   <Project Path="Phoenix.FPS.Client/Phoenix.FPS.Client.csproj" />
   <Project Path="Phoenix.FPS.Server/Phoenix.FPS.Server.csproj" Id="13e75cb6-b36b-4dfc-8b9e-b6eafdaabf0e" />
+  <Project Path="Phoenix.FPS.Shared/Phoenix.FPS.Shared.csproj" Id="bbb4ed22-bfe1-423e-b2ee-c1e51d0ec12e" />
 </Solution>

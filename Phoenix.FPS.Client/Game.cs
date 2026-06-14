@@ -15,11 +15,13 @@ using Silk.NET.Maths;
 using Silk.NET.OpenGL;
 using System.Numerics;
 using Phoenix.Framework.Rendering.Primitives;
+using ImGuiNET;
 //using Cube as Phoenix
 namespace Phoenix.FPS.Client
 {
     public class Game : PhoenixGame
     {
+        public static Game Instance = default!; 
         Matrix4x4 _cubeWorld = Matrix4x4.Identity;
 
         protected override void InitialLoadScreen()
@@ -35,9 +37,10 @@ namespace Phoenix.FPS.Client
         Cube cubePrim;
         protected override void Initialize()
         {
+            Instance = this;
             //Primitive.SetGL(GL);
             Window.VSync = false;
-            Window.UpdatesPerSecond = 0;
+            Window.FramesPerSecond = 165;
             Log.Enabled = true;
             Log.ConsoleWrite = true;
             
@@ -79,19 +82,30 @@ namespace Phoenix.FPS.Client
             Gizmos.Enabled = true;
 
             cubePrim = Cube.Create(new InfoCube { MeshPrimitiveType = PrimitiveType.Triangles, Uv = true });
+
+            Network.Client.Init(this);
         }
                 
         protected override void Update(double deltaTime)
         {
-            
+            var cam = ((FreeCamera)Camera);
             if (InputManager.KeyDown(Key.Escape))
                 Stop();
 
+            if (InputManager.KeyDownOnce(Key.Tab))
+            {
+                InputManager.ToggleMouseMode();
+                cam.MouseAim = !cam.MouseAim;
+            }
+
+
             // Game logic ...
             var t = (float)Graphics.Time;
-            ((FreeCamera)Camera).Update(deltaTime);
+            cam.Update(deltaTime);
             _cubeWorld = Matrix4x4.CreateScale(5f)
                 * MathHelper.RotationMxFromYawPitchRoll(t, MathF.Sin(t), MathF.Cos(t));
+
+            Network.Client.Update();
         }
 
         protected override void Render(double deltaTime)
@@ -127,6 +141,14 @@ namespace Phoenix.FPS.Client
                 color: Vector4.One,
                 size: 20);
 
+            int fps = (int)Window.FramesPerSecond;
+            
+            if(ImGui.DragInt("fps limit", ref fps, 1, 0, 1000))
+            {
+                Window.FramesPerSecond = fps;
+            }
+
+            
             
         }
 

@@ -16,6 +16,10 @@
     <None Include="Content\asset-manifest.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Phoenix.FPS.Shared\Phoenix.FPS.Shared.csproj" />
+  </ItemGroup>
+
 
   <Target Name="Phoenix-AssetTool-Build" BeforeTargets="BeforeBuild">
     <Exec Command="dotnet pat Content/asset-manifest.json build" StandardOutputImportance="high" />
