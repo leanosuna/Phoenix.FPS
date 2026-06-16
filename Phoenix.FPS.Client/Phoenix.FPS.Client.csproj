@@ -20,6 +20,12 @@
     <ProjectReference Include="..\Phoenix.FPS.Shared\Phoenix.FPS.Shared.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="CFG.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 
   <Target Name="Phoenix-AssetTool-Build" BeforeTargets="BeforeBuild">
     <Exec Command="dotnet pat Content/asset-manifest.json build" StandardOutputImportance="high" />

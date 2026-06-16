@@ -1,165 +1,215 @@
-﻿using Phoenix.Framework;
+﻿using ImGuiNET;
+using Phoenix.FPS.Client.Network;
+using Phoenix.FPS.Client.State;
+using Phoenix.Framework;
 using Phoenix.Framework.AssetImport;
 using Phoenix.Framework.Cameras;
+using Phoenix.Framework.Maths;
 using Phoenix.Framework.Rendering;
 using Phoenix.Framework.Rendering.Geometry.Model;
 using Phoenix.Framework.Rendering.Geometry.Model.Meshes;
 using Phoenix.Framework.Rendering.Geometry.Vertices;
 using Phoenix.Framework.Rendering.GUI;
+using Phoenix.Framework.Rendering.Primitives;
 using Phoenix.Framework.Rendering.Textures;
 using Phoenix.Framework.ShaderHelpers;
-using Phoenix.Framework.Maths;
-
 using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
+using Silk.NET.Windowing;
 using System.Numerics;
-using Phoenix.Framework.Rendering.Primitives;
-using ImGuiNET;
 //using Cube as Phoenix
-namespace Phoenix.FPS.Client
+namespace Phoenix.FPS.Client;
+
+public class Game : PhoenixGame
 {
-    public class Game : PhoenixGame
+    public static Game Instance = default!;
+    Matrix4x4 _cubeWorld = Matrix4x4.Identity;
+
+    protected override void InitialLoadScreen()
     {
-        public static Game Instance = default!; 
-        Matrix4x4 _cubeWorld = Matrix4x4.Identity;
+        UI.DrawText("Custom startup screen",
+            position: Vector2.Zero,
+            color: Vector4.One,
+            size: 30);
+    }
+    ShaderModel shaderModel;
+    GLTextureCube cubeTex;
+    ShaderSkybox ShaderSkybox;
+    Cube cubePrim;
+    public CFG CFG;
+    protected override void Initialize()
+    {
+        Instance = this;
+        MessagesIn.Init();
+        MessagesOut.Init();
 
-        protected override void InitialLoadScreen()
+        Log.Enabled = true;
+        Log.ConsoleWrite = true;
+        if (!CfgFile.Load(out CFG))
         {
-            UI.DrawText("Custom startup screen", 
-                position: Vector2.Zero, 
-                color: Vector4.One, 
-                size: 30);
+            Log.Error("CFG not found");
+            Stop();
         }
-        ShaderModel shaderModel;
-        GLTextureCube cubeTex;
-        ShaderSkybox ShaderSkybox;
-        Cube cubePrim;
-        protected override void Initialize()
+        if(CFG.PlayerID == 0)
         {
-            Instance = this;
-            //Primitive.SetGL(GL);
-            Window.VSync = false;
-            Window.FramesPerSecond = 165;
-            Log.Enabled = true;
-            Log.ConsoleWrite = true;
-            
-            shaderModel = new ShaderModel();
-            shaderModel.AttachUBO(CommonUboHandle, "CommonData");
-
-            ShaderSkybox = new ShaderSkybox();
-            ShaderSkybox.AttachUBO(CommonUboHandle, "CommonData");
-
-            //model = AssetLoader.LoadModel("3D/player/swatguy/Ch15_nonPBR");
-
-            var basePath = "Textures/skybox/";
-            cubeTex = AssetLoader.LoadTextureCube(
-                [basePath + "right",
-                basePath + "left",
-                basePath + "top",
-                basePath + "bottom",
-                basePath + "front",
-                basePath + "back"]);
-
-
-            // Asset loading ...
-            var cam =  new FreeCamera(
-                game: this,
-                position: new Vector3(0, 0, -10),
-                yaw: MathHelper.PiOver2,
-                pitch: 0f,
-                fov: MathHelper.PiOver2,
-                nearPlane: 0.1f, 
-                farPlane: 1000f,
-                aspectRatio: WindowWidth / (float)WindowHeight
-            );
-            cam.SetMoveKeys(Key.W, Key.S, Key.A, Key.D, Key.Space, Key.AltLeft, Key.ShiftLeft, 2f);
-            cam.SetPitchYawKeys(Key.Up, Key.Down, Key.Left, Key.Right, Vector2.One);
-            cam.MouseAim = true;
-
-            Camera = cam;
-
-            Gizmos.Enabled = true;
-
-            cubePrim = Cube.Create(new InfoCube { MeshPrimitiveType = PrimitiveType.Triangles, Uv = true });
-
-            Network.Client.Init(this);
+            CFG.PlayerID = (uint)new Random().NextInt64();
         }
-                
-        protected override void Update(double deltaTime)
+        CfgFile.Save(CFG);
+        //CFG.WindowSize = new Vector2(1280, 720);
+        
+
+        //Primitive.SetGL(GL);
+
+        ApplyWindowSettings();
+
+
+
+        shaderModel = new ShaderModel();
+        shaderModel.AttachUBO(CommonUboHandle, "CommonData");
+
+        ShaderSkybox = new ShaderSkybox();
+        ShaderSkybox.AttachUBO(CommonUboHandle, "CommonData");
+
+        //model = AssetLoader.LoadModel("3D/player/swatguy/Ch15_nonPBR");
+
+        var basePath = "Textures/skybox/";
+        cubeTex = AssetLoader.LoadTextureCube(
+            [basePath + "right",
+            basePath + "left",
+            basePath + "top",
+            basePath + "bottom",
+            basePath + "front",
+            basePath + "back"]);
+
+
+        // Asset loading ...
+        var cam = new FreeCamera(
+            game: this,
+            position: new Vector3(0, 0, -10),
+            yaw: MathHelper.PiOver2,
+            pitch: 0f,
+            fov: MathHelper.PiOver2,
+            nearPlane: 0.1f,
+            farPlane: 1000f,
+            aspectRatio: WindowWidth / (float)WindowHeight
+        );
+        cam.SetMoveKeys(Key.W, Key.S, Key.A, Key.D, Key.Space, Key.AltLeft, Key.ShiftLeft, 2f);
+        cam.SetPitchYawKeys(Key.Up, Key.Down, Key.Left, Key.Right, Vector2.One);
+        cam.MouseAim = true;
+
+        Camera = cam;
+
+        Gizmos.Enabled = true;
+
+        cubePrim = Cube.Create(new InfoCube { MeshPrimitiveType = PrimitiveType.Triangles, Uv = true });
+
+        Network.Client.Init(this);
+
+        GameStateManager.Init();
+    }
+
+    protected override void Update(double deltaTime)
+    {
+        var cam = ((FreeCamera)Camera);
+        if (InputManager.KeyDown(Key.Escape))
+            Stop();
+
+        if (InputManager.KeyDownOnce(Key.Tab))
         {
-            var cam = ((FreeCamera)Camera);
-            if (InputManager.KeyDown(Key.Escape))
-                Stop();
-
-            if (InputManager.KeyDownOnce(Key.Tab))
-            {
-                InputManager.ToggleMouseMode();
-                cam.MouseAim = !cam.MouseAim;
-            }
-
-
-            // Game logic ...
-            var t = (float)Graphics.Time;
-            cam.Update(deltaTime);
-            _cubeWorld = Matrix4x4.CreateScale(5f)
-                * MathHelper.RotationMxFromYawPitchRoll(t, MathF.Sin(t), MathF.Cos(t));
-
-            Network.Client.Update();
-        }
-
-        protected override void Render(double deltaTime)
-        {
-            // Render logic ...
-            Graphics.SetClearColor(new Vector4(0.1f, 0.1f, 0.1f, 1));
-            Graphics.ClearRenderTarget();
-
-            //Gizmos.AddCube(_cubeWorld, Vector3.One);
-            //Gizmos.AddCube()
-            Graphics.SetFaceCulling(false);
-            Graphics.SetDepthTest(true, GLEnum.Lequal);
-           
-
-            shaderModel.World.Set(_cubeWorld);
-            shaderModel.Tex.Set(cubeTex);
-            
-            ShaderSkybox.Use();
-            ShaderSkybox.Tex.Set(cubeTex);
-
-            Graphics.SetFaceCulling(true, GLEnum.Front);
-            cubePrim.Draw();
-
-            Gizmos.AddCube(_cubeWorld, Vector3.One);
-            Gizmos.AddAxisLines(400);
+            InputManager.ToggleMouseMode();
+            cam.MouseAim = !cam.MouseAim;
         }
 
-        protected override void RenderUI()
+
+        // Game logic ...
+        var t = (float)Graphics.Time;
+        cam.Update(deltaTime);
+        _cubeWorld = Matrix4x4.CreateScale(5f)
+            * MathHelper.RotationMxFromYawPitchRoll(t, MathF.Sin(t), MathF.Cos(t));
+
+        Network.Client.Update();
+    }
+
+    protected override void Render(double deltaTime)
+    {
+        // Render logic ...
+        Graphics.SetClearColor(new Vector4(0.1f, 0.1f, 0.1f, 1));
+        Graphics.ClearRenderTarget();
+
+        //Gizmos.AddCube(_cubeWorld, Vector3.One);
+        //Gizmos.AddCube()
+        Graphics.SetFaceCulling(false);
+        Graphics.SetDepthTest(true, GLEnum.Lequal);
+
+
+        shaderModel.World.Set(_cubeWorld);
+        shaderModel.Tex.Set(cubeTex);
+
+        ShaderSkybox.Use();
+        ShaderSkybox.Tex.Set(cubeTex);
+
+        Graphics.SetFaceCulling(true, GLEnum.Front);
+        cubePrim.Draw();
+
+        Gizmos.AddCube(_cubeWorld, Vector3.One);
+        Gizmos.AddAxisLines(400);
+    }
+
+    protected override void RenderUI()
+    {
+        // UI pass...
+        UI.DrawRAlignedText($"FPS {(int)Graphics.FPS_SAMPLE}",
+            position: new Vector2(WindowWidth, 10),
+            color: Vector4.One,
+            size: 20);
+
+        int fps = (int)Window.FramesPerSecond;
+
+        if (ImGui.DragInt("fps limit", ref fps, 1, 0, 1000))
         {
-            // UI pass...
-            UI.DrawRAlignedText($"FPS {(int)Graphics.FPS_SAMPLE}",
-                position: new Vector2(WindowWidth, 10),
-                color: Vector4.One,
-                size: 20);
-
-            int fps = (int)Window.FramesPerSecond;
-            
-            if(ImGui.DragInt("fps limit", ref fps, 1, 0, 1000))
-            {
-                Window.FramesPerSecond = fps;
-            }
-
-            
-            
+            Window.FramesPerSecond = fps;
         }
 
-        protected override void OnWindowResize(Vector2 size)
-        {
-            // Something needs resizing...
-        }
 
-        protected override void OnClose()
-        {
-            // Something needs disposing...
-        }
+
+    }
+    
+    public void ValidateWindowSettings()
+    {
+        CFG.FPSLimit = Math.Clamp(CFG.FPSLimit, 0, 1000);
+        CFG.WindowWidth = Math.Clamp(CFG.WindowWidth, 0, 10000);
+        CFG.WindowHeight = Math.Clamp(CFG.WindowHeight, 0, 10000);
+    }
+
+    public void ApplyWindowSettings()
+    {
+
+        Window.VSync = CFG.Vsync;
+        Window.FramesPerSecond = CFG.FPSLimit;
+
+        var full = CFG.FullScreen || CFG.WindowedFullScreen;
+        var max = CFG.WindowedMaximized;
+        var window = new Vector2D<int>(CFG.WindowWidth, CFG.WindowHeight);
+        var res = full?
+            Window.Monitor?.VideoMode.Resolution: window;
+        
+        if (!res.HasValue)
+            res = window;
+
+        Graphics.SetResolution(res.Value.ToNum(), full);
+        Window.Center();
+        //Window.WindowBorder = full ? WindowBorder.Hidden : WindowBorder.Resizable;
+        Window.WindowState = max ? WindowState.Maximized : WindowState.Normal;
+    }
+
+    protected override void OnWindowResize(Vector2 size)
+    {
+        // Something needs resizing...
+    }
+
+    protected override void OnClose()
+    {
+        // Something needs disposing...
     }
 }

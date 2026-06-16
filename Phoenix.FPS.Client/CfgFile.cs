@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Text.Json;
 
-namespace Phoenix.FPS.Server;
+namespace Phoenix.FPS.Client;
 
 public static class CfgFile
 {

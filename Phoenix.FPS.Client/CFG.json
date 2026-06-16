@@ -1,0 +1,13 @@
+{
+  "PlayerName": "no-name",
+  "PlayerID": 0,
+  "Version": 1,
+  "Vsync": false,
+  "FPSLimit": 300,
+  "FullScreen": false,
+  "WindowedFullScreen": false,
+  "WindowedMaximized": false,
+  "Windowed": true,
+  "WindowWidth": 1280,
+  "WindowHeight": 720
+}
