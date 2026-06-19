@@ -1,6 +1,6 @@
 {
-  "PlayerName": "no-name",
-  "PlayerID": 0,
+  "PlayerName": "nix",
+  "PlayerID": 12345678,
   "Version": 1,
   "Vsync": false,
   "FPSLimit": 300,

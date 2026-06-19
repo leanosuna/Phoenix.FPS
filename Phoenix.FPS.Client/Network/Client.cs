@@ -22,7 +22,7 @@ internal static class Client
             throw new Exception("failed to get server ip");
         }
         ip = addresses[0].MapToIPv4().ToString() + ":7777";
-        
+
         RiptideClient.Connect(ip, 10);
         RiptideClient.ConnectionFailed += ConnectionFailed;
         RiptideClient.Connected += Connected;
@@ -47,6 +47,7 @@ internal static class Client
     }
     private static void ConnectionFailed(object? sender, Riptide.ConnectionFailedEventArgs e)
     {
+        Console.WriteLine("connection failed");
     }
     static double lastT = 0; 
     public static void Update()

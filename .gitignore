@@ -6,6 +6,10 @@
 # dotenv files
 .env
 
+# Agent/skill docs (local dev guides, not part of source)
+AGENTS.md
+**/SKILLS.md
+
 Phoenix.FPS.Client/Content/
 
 # User-specific files

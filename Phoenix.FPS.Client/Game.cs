@@ -104,7 +104,7 @@ public class Game : PhoenixGame
 
         cubePrim = Cube.Create(new InfoCube { MeshPrimitiveType = PrimitiveType.Triangles, Uv = true });
 
-        Network.Client.Init(this);
+        Network.Client.Init();
 
         GameStateManager.Init();
     }

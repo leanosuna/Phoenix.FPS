@@ -1,4 +1,6 @@
 {
   "ServerTPS": 200,
-  "Version": 1
+  "Version": 1,
+  "DashboardPort": 7775,
+  "DashboardEnabled": true
 }

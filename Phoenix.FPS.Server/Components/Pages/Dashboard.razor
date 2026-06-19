@@ -1,0 +1,232 @@
+@page "/"
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@inject DashboardStateService StateService
+@inject DashboardActions Actions
+
+<div class="container-fluid px-0">
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <div class="stat-card h-100">
+                <div class="stat-label">Status</div>
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <span class="status-dot @(snapshot.GameModeStatus == "Running" ? "running" : "idle")"></span>
+                    <span class="stat-value">@snapshot.GameModeStatus</span>
+                </div>
+                <div class="stat-sub">TPS: @snapshot.ServerTPS</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stat-card h-100">
+                <div class="stat-label">Players</div>
+                <div class="stat-value">@snapshot.ConnectedPlayers / @snapshot.TotalPlayers</div>
+                <div class="stat-sub">Max: 50</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stat-card h-100">
+                <div class="stat-label">Uptime</div>
+                <div class="stat-value text-mono">@uptimeStr</div>
+                <div class="stat-sub">since @Server.StartTime.ToLocalTime().ToString("HH:mm:ss")</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stat-card h-100">
+                <div class="stat-label">Throughput</div>
+                <div class="stat-value text-mono" style="font-size:1.1rem">&uarr;@snapshot.TotalPacketsIn &darr;@snapshot.TotalPacketsOut</div>
+                <div class="stat-sub">packets / sec</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section-header">
+        <div class="d-flex align-items-center gap-3">
+            <h2>Players</h2>
+            <span class="section-badge">@snapshot.ConnectedPlayers connected</span>
+        </div>
+    </div>
+
+    <div class="stat-card mb-4 p-0 overflow-hidden">
+        @if (snapshot.Players.Count == 0)
+        {
+            <div class="text-center text-secondary py-5">
+                <p class="mb-0">No players connected yet.</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-dashboard-wrapper">
+                <table class="table-dashboard">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th class="hide-mobile">ID</th>
+                            <th>FPS</th>
+                            <th>RTT</th>
+                            <th>Status</th>
+                            <th>Ready</th>
+                            <th class="hide-mobile">Packets</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in snapshot.Players)
+                        {
+                            <tr class="@(p.Ready ? "ready-row" : "")">
+                                <td><span class="fw-medium">@p.Name</span></td>
+                                <td class="hide-mobile text-mono text-secondary">@p.ID</td>
+                                <td class="text-mono">@(p.Connected ? p.FPS.ToString() : "-")</td>
+                                <td class="text-mono">@(p.Connected ? $"{p.RTT}ms" : "-")</td>
+                                <td>
+                                    <span class="d-flex align-items-center">
+                                        <span class="status-dot @(p.Connected ? "online" : "offline")"></span>
+                                        @(p.Connected ? "Online" : "Offline")
+                                    </span>
+                                </td>
+                                <td>
+                                    @if (p.Ready)
+                                    {
+                                        <span class="ready-badge">&#10003; Ready</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">--</span>
+                                    }
+                                </td>
+                                <td class="hide-mobile text-mono text-secondary">
+                                    @(p.Connected ? $"\u2191{p.PacketsIn} \u2193{p.PacketsOut}" : "-")
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+
+    <div class="section-header">
+        <h2>Actions</h2>
+    </div>
+
+    <div class="stat-card mb-4">
+        <div class="action-buttons d-flex gap-2">
+            @if (Server.GameModeStatus == "Running")
+            {
+                <button class="btn-action btn-stop" @onclick="StopGame">
+                    &#9632; Stop Game
+                </button>
+            }
+            else
+            {
+                <button class="btn-action btn-start" @onclick="StartGame">
+                    &#9654; Start Game
+                </button>
+            }
+            <button class="btn-action btn-reset" @onclick="ResetMetrics">
+                &#8635; Reset Metrics
+            </button>
+            <button class="btn-action" @onclick="ClearLog">
+                &#128465; Clear Log
+            </button>
+        </div>
+    </div>
+</div>
+
+@code {
+    private ServerSnapshot snapshot = new(DateTime.UtcNow, 200, 0, "Idle", 0, 0, 0, 0, new());
+    private string uptimeStr = "00:00:00";
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<Dashboard>? _ref;
+
+    [JSInvokable]
+    public void Poll()
+    {
+        if (_disposed) return;
+        try
+        {
+            UpdateSnapshot();
+            StateHasChanged();
+        }
+        catch (JSDisconnectedException) { _disposed = true; }
+        catch (ObjectDisposedException) { _disposed = true; }
+        catch (InvalidOperationException ioe) when (ioe.Message.Contains("circuit", StringComparison.OrdinalIgnoreCase))
+        { _disposed = true; }
+    }
+
+    protected override void OnInitialized()
+    {
+        UpdateSnapshot();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _ref = DotNetObjectReference.Create(this);
+            _module = await JS.InvokeAsync<IJSObjectReference>("import", "./dashboard.js");
+            await _module.InvokeVoidAsync("startPolling", _ref, 500);
+        }
+    }
+
+    void UpdateSnapshot()
+    {
+        try
+        {
+            snapshot = StateService.GetSnapshot();
+            uptimeStr = FormatUptime(DateTime.UtcNow - snapshot.StartTime);
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"Dashboard snapshot: {ex.Message}");
+        }
+    }
+
+    void StartGame()
+    {
+        Actions.ToggleGameMode();
+        UpdateSnapshot();
+        StateHasChanged();
+    }
+
+    void StopGame()
+    {
+        Actions.ToggleGameMode();
+        UpdateSnapshot();
+        StateHasChanged();
+    }
+
+    void ResetMetrics()
+    {
+        Actions.ResetMetrics();
+        UpdateSnapshot();
+        StateHasChanged();
+    }
+
+    void ClearLog()
+    {
+        Actions.ClearLog();
+    }
+
+    static string FormatUptime(TimeSpan t)
+    {
+        return t.Days > 0
+            ? $"{t.Days}d {t.Hours:D2}:{t.Minutes:D2}:{t.Seconds:D2}"
+            : $"{t.Hours:D2}:{t.Minutes:D2}:{t.Seconds:D2}";
+    }
+
+    bool _disposed;
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        if (_module != null)
+        {
+            try
+            {
+                await _module.InvokeVoidAsync("stopPolling");
+            }
+            catch { }
+            await _module.DisposeAsync();
+        }
+        _ref?.Dispose();
+    }
+}

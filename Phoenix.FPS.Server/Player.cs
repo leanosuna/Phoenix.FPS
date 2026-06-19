@@ -12,6 +12,12 @@ public class Player
     public string Name = "";
     public PlayerState State = default!;
     public int FPS;
+
+    public int PacketsIn;
+    public int PacketsOut;
+
+    public bool Ready;
+
     public Player()
     {
         

@@ -1,4 +1,6 @@
-﻿using Phoenix.FPS.Shared;
+﻿using Phoenix.FPS.Server.Components;
+using Phoenix.FPS.Server.Services;
+using Phoenix.FPS.Shared;
 using Riptide;
 using Riptide.Utils;
 using System.Collections.Concurrent;
@@ -13,13 +15,15 @@ class Server
     
     public static uint ServerTPS;
     public static CFG CFG = default!;
+    public static DateTime StartTime = DateTime.UtcNow;
+    public static string GameModeStatus = "Idle";
 
     private static ConcurrentDictionary<ushort, Player> _netPlayers = new();
     private static ConcurrentDictionary<uint, Player> _idPlayers = new();
     public static ConcurrentBag<Player> Players = new();
 
     static bool riptideToConsole = true;
-    static void Main(string[] args)
+    static async Task Main(string[] args)
     {
         Log.Enabled = true;
         Log.Verbose = true;
@@ -44,17 +48,60 @@ class Server
         TimerCallback callback = TimerElapsed;
 
         timerId = timeSetEvent(TargetMS, 0, callback, IntPtr.Zero, 1);
-        Console.WriteLine("Server started. Press Enter to exit.");
+
+        WebApplication? dashboardApp = null;
+        if (CFG.DashboardEnabled)
+        {
+            try
+            {
+                dashboardApp = BuildDashboard(args);
+                _ = dashboardApp.RunAsync();
+                Log.Info($"Dashboard listening on http://localhost:{CFG.DashboardPort}", true);
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Failed to start dashboard: {ex.Message}", true);
+            }
+        }
+
+        Log.Info("Game server started. Press Enter to exit.",true);
         Console.ReadLine();
-
-
+        Log.Info("Game server stopped.", true);
+        if (dashboardApp != null)
+        {
+            await dashboardApp.StopAsync();
+            Log.Info("Dashboard stopped", true);
+        }
     }
 
+    static WebApplication BuildDashboard(string[]? args)
+    {
+        var builder = WebApplication.CreateBuilder(args ?? []);
+
+        builder.WebHost.UseUrls($"http://0.0.0.0:{CFG.DashboardPort}");
+        builder.WebHost.UseStaticWebAssets();
+
+        builder.Services.AddRazorComponents().AddInteractiveServerComponents();
+        builder.Services.AddSingleton<DashboardStateService>();
+        builder.Services.AddSingleton<DashboardActions>();
+
+        var app = builder.Build();
+
+        if (app.Environment.IsDevelopment())
+            app.UseDeveloperExceptionPage();
+
+        app.UseStaticFiles();
+        app.UseRouting();
+        app.UseAntiforgery();
+
+        app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
+
+        return app;
+    }
     
     static void UpdateTick()
     {
         MessagesOut.BroadcastPlayerData();
-
 
     }
 
@@ -71,11 +118,12 @@ class Server
         {
             GetPlayerNet(c.Id, out var p);
             var m = c.Metrics;
-            var mIn = m.UnreliableIn;
-            var mOut = m.UnreliableOut;
 
-            var status = p!.Connected ? $"{p.FPS} fps, {c.RTT} ms, packets in {mIn} out {mOut}": "offline";
-            Log.Info($"[{p!.ID}] ({c.Id}) {status}",true);
+            p!.PacketsIn = m.UnreliableIn;
+            p.PacketsOut = m.UnreliableOut;
+
+            var status = p.Connected ? $"{p.FPS} fps, {c.RTT} ms, packets in {p.PacketsIn} out {p.PacketsOut}" : "offline";
+            Log.Info($"[{p.ID}] ({c.Id}) {status}", true);
 
             m.Reset();
         }
