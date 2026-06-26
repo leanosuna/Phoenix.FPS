@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Phoenix.FPS.Client/Phoenix.FPS.Client.csproj" />
+  <Project Path="Phoenix.FPS.Shared/Phoenix.FPS.Shared.csproj" Id="bbb4ed22-bfe1-423e-b2ee-c1e51d0ec12e" />
+</Solution>

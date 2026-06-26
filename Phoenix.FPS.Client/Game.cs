@@ -1,9 +1,13 @@
 ﻿using ImGuiNET;
+using Phoenix.FPS.Client.Editor;
+using Phoenix.FPS.Client.Maps;
 using Phoenix.FPS.Client.Network;
+using Phoenix.FPS.Client.Players;
 using Phoenix.FPS.Client.State;
 using Phoenix.Framework;
 using Phoenix.Framework.AssetImport;
 using Phoenix.Framework.Cameras;
+using Phoenix.Framework.Collisions;
 using Phoenix.Framework.Maths;
 using Phoenix.Framework.Rendering;
 using Phoenix.Framework.Rendering.Geometry.Model;
@@ -18,7 +22,6 @@ using Silk.NET.Maths;
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
 using System.Numerics;
-//using Cube as Phoenix
 namespace Phoenix.FPS.Client;
 
 public class Game : PhoenixGame
@@ -33,11 +36,19 @@ public class Game : PhoenixGame
             color: Vector4.One,
             size: 30);
     }
-    ShaderModel shaderModel;
-    GLTextureCube cubeTex;
-    ShaderSkybox ShaderSkybox;
-    Cube cubePrim;
+    public ShaderModel ShaderModel;
     public CFG CFG;
+    
+    Paintball MapPaintball;
+    public SkyBox SkyBox;
+
+    Player p;
+    FreeCamera FreeCamera;
+    DebugWindow _debugWindow;
+    bool _prevLeftMouse;
+    bool _prevRightMouse;
+    bool hit;
+    
     protected override void Initialize()
     {
         Instance = this;
@@ -56,34 +67,16 @@ public class Game : PhoenixGame
             CFG.PlayerID = (uint)new Random().NextInt64();
         }
         CfgFile.Save(CFG);
-        //CFG.WindowSize = new Vector2(1280, 720);
-        
-
-        //Primitive.SetGL(GL);
 
         ApplyWindowSettings();
+        p = new Player { Position = Vector3.UnitY * 1, Pitch = 0, Yaw = 0};
 
-
-
-        shaderModel = new ShaderModel();
-        shaderModel.AttachUBO(CommonUboHandle, "CommonData");
-
-        ShaderSkybox = new ShaderSkybox();
-        ShaderSkybox.AttachUBO(CommonUboHandle, "CommonData");
-
-        //model = AssetLoader.LoadModel("3D/player/swatguy/Ch15_nonPBR");
-
-        var basePath = "Textures/skybox/";
-        cubeTex = AssetLoader.LoadTextureCube(
-            [basePath + "right",
-            basePath + "left",
-            basePath + "top",
-            basePath + "bottom",
-            basePath + "front",
-            basePath + "back"]);
-
-
-        // Asset loading ...
+        ShaderModel = new ShaderModel();
+        ShaderModel.AttachUBO(CommonUboHandle, "CommonData");
+                
+        MapPaintball = new Paintball();
+        SkyBox = new SkyBox();
+        
         var cam = new FreeCamera(
             game: this,
             position: new Vector3(0, 0, -10),
@@ -97,82 +90,157 @@ public class Game : PhoenixGame
         cam.SetMoveKeys(Key.W, Key.S, Key.A, Key.D, Key.Space, Key.AltLeft, Key.ShiftLeft, 2f);
         cam.SetPitchYawKeys(Key.Up, Key.Down, Key.Left, Key.Right, Vector2.One);
         cam.MouseAim = true;
-
+        cam.MoveSpeed = 15f;
         Camera = cam;
-
+        FreeCamera = cam;
         Gizmos.Enabled = true;
-
-        cubePrim = Cube.Create(new InfoCube { MeshPrimitiveType = PrimitiveType.Triangles, Uv = true });
-
+                
         Network.Client.Init();
 
         GameStateManager.Init();
-    }
 
+        _debugWindow = new DebugWindow();
+
+    }
+    List<(Vector3 a, Vector3 b, Vector3 c, Vector3 h)> thit = new();
     protected override void Update(double deltaTime)
     {
         var cam = ((FreeCamera)Camera);
+        var dt = (float)deltaTime;
         if (InputManager.KeyDown(Key.Escape))
             Stop();
 
-        if (InputManager.KeyDownOnce(Key.Tab))
+        if (InputManager.KeyDownOnce(Key.CapsLock))
         {
             InputManager.ToggleMouseMode();
             cam.MouseAim = !cam.MouseAim;
         }
 
-
+        MapPaintball.SkipDraw = InputManager.KeyDown(Key.Number1);
+        //if(InputManager.KeyDown(Key.Up))
+        //{
+        //    p.Position += p.FrontDir * dt * 4;
+        //}
+        //if (InputManager.KeyDown(Key.Down))
+        //{
+        //    p.Position -= p.FrontDir * dt * 4;
+        //}
+        //if (InputManager.KeyDown(Key.Left))
+        //{
+        //    p.Yaw += dt * 2;
+        //}
+        //if (InputManager.KeyDown(Key.Right))
+        //{
+        //    p.Yaw -= dt * 2;
+        //}
         // Game logic ...
         var t = (float)Graphics.Time;
         cam.Update(deltaTime);
-        _cubeWorld = Matrix4x4.CreateScale(5f)
-            * MathHelper.RotationMxFromYawPitchRoll(t, MathF.Sin(t), MathF.Cos(t));
-
+        
         Network.Client.Update();
+        
+        p.Update();
+        //var ray = new Ray(p.Position, p.FrontDir);
+        var ray = new Ray(FreeCamera.Position, FreeCamera.Front);
+        thit.Clear();
+
+        foreach (var col in MapPaintball.Colliders)
+        {
+            var tris = col.CollisionTriangles.OrderByDescending(ct => DistanceToP(ct, FreeCamera.Position));
+
+            foreach(var tr in tris)
+            {
+                
+                var hitPos = ray.Intersects(tr.V[0], tr.V[1], tr.V[2]);
+                
+                if(hitPos.HasValue)
+                {
+                    if(Vector3.DistanceSquared(hitPos.Value, FreeCamera.Position) < 50)
+                    {
+                        thit.Add((tr.V[0], tr.V[1], tr.V[2], hitPos.Value));
+                    }
+                }
+            }
+        }
+        hit = thit.Count > 0;
+
+        var mouse = InputManager.GetInputContext().Mice[0];
+        bool leftDown = mouse.IsButtonPressed(Silk.NET.Input.MouseButton.Left);
+        bool rightDown = mouse.IsButtonPressed(Silk.NET.Input.MouseButton.Right);
+
+        if (leftDown && !_prevLeftMouse && cam.MouseAim && thit.Count > 0)
+        {
+            var nearest = thit.OrderBy(t => Vector3.DistanceSquared(t.h, FreeCamera.Position)).First();
+            _debugWindow.AddReferencePoint(nearest.h);
+        }
+
+        if (rightDown && !_prevRightMouse && cam.MouseAim)
+            _debugWindow.CancelSelection();
+
+        _prevLeftMouse = leftDown;
+        _prevRightMouse = rightDown;
+
+        Gizmos.AddLine(p.Position, p.Position + p.FrontDir * 2, Vector3.One);
+
     }
 
+    float DistanceToP(CollisionTriangle ct, Vector3 pos)
+    {
+        var centroid = (ct.V[0] + ct.V[1] + ct.V[2]) / 3;
+        return Vector3.DistanceSquared(p.Position, centroid);
+    }
+
+    bool ValidateCT(CollisionTriangle ct, Vector3 pos, float checkDistSq = 5)
+    {
+        var centroid = (ct.V[0] + ct.V[1] + ct.V[2]) / 3;
+
+        return Vector3.DistanceSquared(pos, ct.V[0]) < checkDistSq ||
+            Vector3.DistanceSquared(pos, ct.V[1]) < checkDistSq ||
+            Vector3.DistanceSquared(p.Position, ct.V[2]) < checkDistSq ||
+            Vector3.DistanceSquared(p.Position, centroid) < checkDistSq;
+    }
     protected override void Render(double deltaTime)
     {
-        // Render logic ...
         Graphics.SetClearColor(new Vector4(0.1f, 0.1f, 0.1f, 1));
         Graphics.ClearRenderTarget();
 
-        //Gizmos.AddCube(_cubeWorld, Vector3.One);
-        //Gizmos.AddCube()
-        Graphics.SetFaceCulling(false);
+         Graphics.SetFaceCulling(false);
         Graphics.SetDepthTest(true, GLEnum.Lequal);
 
+        SkyBox.Draw();
 
-        shaderModel.World.Set(_cubeWorld);
-        shaderModel.Tex.Set(cubeTex);
+        var w = Matrix4x4.CreateScale(0.007f);
+        var i = 0;
 
-        ShaderSkybox.Use();
-        ShaderSkybox.Tex.Set(cubeTex);
+        MapPaintball.Draw();
+        
 
-        Graphics.SetFaceCulling(true, GLEnum.Front);
-        cubePrim.Draw();
+        Gizmos.AddCube(p.Transform, new Vector3(0, 1, 1), hit);
 
-        Gizmos.AddCube(_cubeWorld, Vector3.One);
-        Gizmos.AddAxisLines(400);
+        foreach(var t in thit)
+        {
+            Gizmos.AddLine(t.a, t.b, new Vector3(1, 0, 1));
+            Gizmos.AddLine(t.a, t.c, new Vector3(1, 0, 1));
+            Gizmos.AddLine(t.b, t.c, new Vector3(1, 0, 1));
+            Gizmos.AddSphere(t.h, 0.25f, new Vector3(0, 1, 1));
+
+        }
+
+        _debugWindow.RenderGizmos();
+
     }
-
+    
     protected override void RenderUI()
     {
-        // UI pass...
         UI.DrawRAlignedText($"FPS {(int)Graphics.FPS_SAMPLE}",
             position: new Vector2(WindowWidth, 10),
             color: Vector4.One,
             size: 20);
 
-        int fps = (int)Window.FramesPerSecond;
+        _debugWindow.RenderUI();
 
-        if (ImGui.DragInt("fps limit", ref fps, 1, 0, 1000))
-        {
-            Window.FramesPerSecond = fps;
-        }
-
-
-
+        if(thit.Count > 0)
+            UI.DrawHCenteredText($"{thit[0].h.ToStrF2()}", new Vector2(WindowWidth/2, 0), Vector4.One, 20);
     }
     
     public void ValidateWindowSettings()
@@ -210,6 +278,6 @@ public class Game : PhoenixGame
 
     protected override void OnClose()
     {
-        // Something needs disposing...
+        _debugWindow?.Save();
     }
 }
