@@ -52,7 +52,7 @@ internal static class Client
     static double lastT = 0; 
     public static void Update()
     {
-        var t = _game.Graphics.Time;
+        var t = _game.Graphics.Metrics.Time;
         var tdiff = t - lastT;
         
         RiptideClient.Update();

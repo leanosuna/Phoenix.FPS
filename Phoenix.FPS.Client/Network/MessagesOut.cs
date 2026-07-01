@@ -27,7 +27,7 @@ internal static class MessagesOut
     public static void SendData()
     {
         var m = Message.Create(MessageSendMode.Unreliable, ClientToServer.PlayerData)
-            .Add((int)game.Graphics.FPS);
+            .Add((int)game.Graphics.Metrics.FPS);
         Client.RiptideClient.Send(m);
     }
 

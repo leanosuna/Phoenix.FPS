@@ -67,8 +67,15 @@ internal class Paintball
     {
         if (SkipDraw)
             return;
-
+        var offset = 48.82f;
+        World = Matrix4x4.CreateScale(MapScale);
         _model.Draw(ShaderModel, PerElement);
+
+        //World = Matrix4x4.CreateScale(MapScale) * Matrix4x4.CreateTranslation(new Vector3(0,0, offset));
+        //_model.Draw(ShaderModel, PerElement);
+
+        //World = Matrix4x4.CreateScale(MapScale) * Matrix4x4.CreateTranslation(new Vector3(0, 0, -offset));
+        //_model.Draw(ShaderModel, PerElement);
 
         //foreach (var item in Colliders)
         //{

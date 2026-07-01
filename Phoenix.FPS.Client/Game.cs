@@ -48,8 +48,10 @@ public class Game : PhoenixGame
     DebugWindow _debugWindow;
     bool hit;
     
+    
     protected override void Initialize()
     {
+        Window.Title = "FPS Client";
         Instance = this;
         MessagesIn.Init();
         MessagesOut.Init();
@@ -86,17 +88,17 @@ public class Game : PhoenixGame
             farPlane: 1000f,
             aspectRatio: WindowWidth / (float)WindowHeight
         );
-        cam.SetMoveKeys(Key.W, Key.S, Key.A, Key.D, Key.Space, Key.AltLeft, Key.ShiftLeft, 2f);
-        cam.SetPitchYawKeys(Key.Up, Key.Down, Key.Left, Key.Right, Vector2.One);
+        cam.SetMoveKeys(Key.W, Key.S, Key.A, Key.D, Key.Space, Key.ControlLeft, Key.ShiftLeft, 2f);
+        //cam.SetPitchYawKeys(Key.Up, Key.Down, Key.Left, Key.Right, Vector2.One);
         cam.MouseAim = true;
         cam.MoveSpeed = 15f;
         Camera = cam;
         FreeCamera = cam;
         Gizmos.Enabled = true;
-        InputManager.SetMouseMode(CursorMode.Raw);  
+        Input.SetMouseMode(CursorMode.Raw);  
         Network.Client.Init();
 
-        GameStateManager.Init();
+        GameState.Init();
 
         _debugWindow = new DebugWindow();
 
@@ -104,36 +106,41 @@ public class Game : PhoenixGame
     ConcurrentBag<(Vector3 a, Vector3 b, Vector3 c, Vector3 h)> thit = new();
     protected override void Update(double deltaTime)
     {
+        GameState.Current.Update(deltaTime);
+
         var cam = ((FreeCamera)Camera);
         var dt = (float)deltaTime;
-        if (InputManager.KeyDown(Key.Escape))
+        if (Input.KeyDown(Key.Escape))
             Stop();
 
-        if (InputManager.KeyDownOnce(Key.CapsLock))
+        if (Input.KeyDownOnce(Key.CapsLock))
         {
-            InputManager.ToggleMouseMode();
+            Input.ToggleMouseMode();
             cam.MouseAim = !cam.MouseAim;
         }
 
-        MapPaintball.SkipDraw = InputManager.KeyDown(Key.Number1);
-        //if(InputManager.KeyDown(Key.Up))
-        //{
-        //    p.Position += p.FrontDir * dt * 4;
-        //}
-        //if (InputManager.KeyDown(Key.Down))
-        //{
-        //    p.Position -= p.FrontDir * dt * 4;
-        //}
-        //if (InputManager.KeyDown(Key.Left))
-        //{
-        //    p.Yaw += dt * 2;
-        //}
-        //if (InputManager.KeyDown(Key.Right))
-        //{
-        //    p.Yaw -= dt * 2;
-        //}
+        MapPaintball.SkipDraw = Input.KeyDown(Key.Number1);
+        if(Input.KeyDown(Key.Up))
+        {
+            p.Position += p.FrontDir * dt * 4;
+        }
+        if (Input.KeyDown(Key.Down))
+        {
+            p.Position -= p.FrontDir * dt * 4;
+        }
+        if (Input.KeyDown(Key.Left))
+        {
+            p.Yaw += dt * 2;
+        }
+        if (Input.KeyDown(Key.Right))
+        {
+            p.Yaw -= dt * 2;
+        }
+
+        //_debugWindow.Volumes
+
         // Game logic ...
-        var t = (float)Graphics.Time;
+        var t = (float)Graphics.Metrics.Time;
         cam.Update(deltaTime);
         
         Network.Client.Update();
@@ -144,7 +151,7 @@ public class Game : PhoenixGame
         thit.Clear();
         
         
-        if (InputManager.MouseLeftDownOnce() && cam.MouseAim)
+        if (Input.MouseLeftDownOnce() && cam.MouseAim)
         {
 
             foreach (var col in MapPaintball.Colliders)
@@ -177,7 +184,7 @@ public class Game : PhoenixGame
 
 
 
-        if (InputManager.MouseRightDownOnce() && cam.MouseAim)
+        if (Input.MouseRightDownOnce() && cam.MouseAim)
             _debugWindow.CancelSelection();
 
         
@@ -202,13 +209,16 @@ public class Game : PhoenixGame
     }
     protected override void Render(double deltaTime)
     {
+        
         Graphics.SetClearColor(new Vector4(0.1f, 0.1f, 0.1f, 1));
         Graphics.ClearRenderTarget();
 
-         Graphics.SetFaceCulling(false);
+        Graphics.SetFaceCulling(false);
         Graphics.SetDepthTest(true, GLEnum.Lequal);
 
         SkyBox.Draw();
+        
+        GameState.Current.Render(deltaTime);
 
         var w = Matrix4x4.CreateScale(0.007f);
         var i = 0;
@@ -234,6 +244,9 @@ public class Game : PhoenixGame
     int crosshairLen = 15;
     protected override void RenderUI()
     {
+        GameState.Current.RenderUI();
+
+
         var drawList = ImGui.GetForegroundDrawList();
 
         var center = WindowSize / 2;
@@ -246,15 +259,13 @@ public class Game : PhoenixGame
         drawList.AddLine(horizontalL, horizontalR, ImGui.ColorConvertFloat4ToU32(Vector4.One),2);
         drawList.AddLine(verticalU, verticalD, ImGui.ColorConvertFloat4ToU32(Vector4.One),2);
 
-        UI.DrawRAlignedText($"FPS {(int)Graphics.FPS_SAMPLE}",
+        UI.DrawRAlignedText($"FPS {Graphics.Metrics.FPS_SAMPLE}",
             position: new Vector2(WindowWidth, 10),
             color: Vector4.One,
             size: 20);
 
         _debugWindow.RenderUI();
-
-        if(thit.Count > 0)
-            UI.DrawHCenteredText($"{thit.First().h.ToStrF2()}", new Vector2(WindowWidth/2, 0), Vector4.One, 20);
+            
     }
     
     public void ValidateWindowSettings()
