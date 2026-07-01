@@ -46,8 +46,6 @@ public class Game : PhoenixGame
     Player p;
     FreeCamera FreeCamera;
     DebugWindow _debugWindow;
-    bool _prevLeftMouse;
-    bool _prevRightMouse;
     bool hit;
     
     protected override void Initialize()
@@ -95,7 +93,7 @@ public class Game : PhoenixGame
         Camera = cam;
         FreeCamera = cam;
         Gizmos.Enabled = true;
-                
+        InputManager.SetMouseMode(CursorMode.Raw);  
         Network.Client.Init();
 
         GameStateManager.Init();
@@ -145,11 +143,8 @@ public class Game : PhoenixGame
         var ray = new Ray(FreeCamera.Position, FreeCamera.Front);
         thit.Clear();
         
-        var mouse = InputManager.GetInputContext().Mice[0];
-        bool leftDown = mouse.IsButtonPressed(Silk.NET.Input.MouseButton.Left);
-        bool rightDown = mouse.IsButtonPressed(Silk.NET.Input.MouseButton.Right);
-
-        if (leftDown && !_prevLeftMouse && cam.MouseAim)
+        
+        if (InputManager.MouseLeftDownOnce() && cam.MouseAim)
         {
 
             foreach (var col in MapPaintball.Colliders)
@@ -182,12 +177,10 @@ public class Game : PhoenixGame
 
 
 
-        if (rightDown && !_prevRightMouse && cam.MouseAim)
+        if (InputManager.MouseRightDownOnce() && cam.MouseAim)
             _debugWindow.CancelSelection();
 
-        _prevLeftMouse = leftDown;
-        _prevRightMouse = rightDown;
-
+        
         Gizmos.AddLine(p.Position, p.Position + p.FrontDir * 2, Vector3.One);
 
     }
