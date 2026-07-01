@@ -31,11 +31,13 @@ internal class DebugWindow
 
     public void AddReferencePoint(Vector3 pos)
     {
+        var countBefore = ReferencePoints.Count;
         ReferencePoints.Add(new ReferencePoint
         {
             Position = pos,
             SourceLabel = $"Pt{ReferencePoints.Count}",
         });
+        _selectedRefIndices.Add(countBefore);
     }
 
     public void CancelSelection()

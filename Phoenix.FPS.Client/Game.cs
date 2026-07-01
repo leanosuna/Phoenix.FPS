@@ -21,6 +21,7 @@ using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
+using System.Collections.Concurrent;
 using System.Numerics;
 namespace Phoenix.FPS.Client;
 
@@ -102,7 +103,7 @@ public class Game : PhoenixGame
         _debugWindow = new DebugWindow();
 
     }
-    List<(Vector3 a, Vector3 b, Vector3 c, Vector3 h)> thit = new();
+    ConcurrentBag<(Vector3 a, Vector3 b, Vector3 c, Vector3 h)> thit = new();
     protected override void Update(double deltaTime)
     {
         var cam = ((FreeCamera)Camera);
@@ -143,36 +144,43 @@ public class Game : PhoenixGame
         //var ray = new Ray(p.Position, p.FrontDir);
         var ray = new Ray(FreeCamera.Position, FreeCamera.Front);
         thit.Clear();
-
-        foreach (var col in MapPaintball.Colliders)
-        {
-            var tris = col.CollisionTriangles.OrderByDescending(ct => DistanceToP(ct, FreeCamera.Position));
-
-            foreach(var tr in tris)
-            {
-                
-                var hitPos = ray.Intersects(tr.V[0], tr.V[1], tr.V[2]);
-                
-                if(hitPos.HasValue)
-                {
-                    if(Vector3.DistanceSquared(hitPos.Value, FreeCamera.Position) < 50)
-                    {
-                        thit.Add((tr.V[0], tr.V[1], tr.V[2], hitPos.Value));
-                    }
-                }
-            }
-        }
-        hit = thit.Count > 0;
-
+        
         var mouse = InputManager.GetInputContext().Mice[0];
         bool leftDown = mouse.IsButtonPressed(Silk.NET.Input.MouseButton.Left);
         bool rightDown = mouse.IsButtonPressed(Silk.NET.Input.MouseButton.Right);
 
-        if (leftDown && !_prevLeftMouse && cam.MouseAim && thit.Count > 0)
+        if (leftDown && !_prevLeftMouse && cam.MouseAim)
         {
-            var nearest = thit.OrderBy(t => Vector3.DistanceSquared(t.h, FreeCamera.Position)).First();
-            _debugWindow.AddReferencePoint(nearest.h);
+
+            foreach (var col in MapPaintball.Colliders)
+            {
+                var tris = col.CollisionTriangles.OrderByDescending(ct => DistanceToP(ct, FreeCamera.Position));
+
+                foreach (var tr in tris)
+                {
+
+                    var hitPos = ray.Intersects(tr.V[0], tr.V[1], tr.V[2]);
+
+                    if (hitPos.HasValue)
+                    {
+                        if (Vector3.DistanceSquared(hitPos.Value, FreeCamera.Position) < 50)
+                        {
+                            thit.Add((tr.V[0], tr.V[1], tr.V[2], hitPos.Value));
+                        }
+                    }
+                }
+            }
+            hit = thit.Count > 0;
+
+            if(hit)
+            {
+                var nearest = thit.OrderBy(t => Vector3.DistanceSquared(t.h, FreeCamera.Position)).First();
+                _debugWindow.AddReferencePoint(nearest.h);
+            }
         }
+
+
+
 
         if (rightDown && !_prevRightMouse && cam.MouseAim)
             _debugWindow.CancelSelection();
@@ -222,16 +230,29 @@ public class Game : PhoenixGame
             Gizmos.AddLine(t.a, t.b, new Vector3(1, 0, 1));
             Gizmos.AddLine(t.a, t.c, new Vector3(1, 0, 1));
             Gizmos.AddLine(t.b, t.c, new Vector3(1, 0, 1));
-            Gizmos.AddSphere(t.h, 0.25f, new Vector3(0, 1, 1));
+            Gizmos.AddSphere(t.h, 0.1f, new Vector3(0, 1, 1));
 
         }
 
         _debugWindow.RenderGizmos();
 
     }
-    
+
+    int crosshairLen = 15;
     protected override void RenderUI()
     {
+        var drawList = ImGui.GetForegroundDrawList();
+
+        var center = WindowSize / 2;
+        var horizontalL = new Vector2(center.X - crosshairLen / 2, center.Y);
+        var horizontalR = new Vector2(center.X + crosshairLen / 2, center.Y);
+        var verticalU = new Vector2(center.X, center.Y + crosshairLen / 2);
+        var verticalD = new Vector2(center.X, center.Y - crosshairLen / 2);
+
+
+        drawList.AddLine(horizontalL, horizontalR, ImGui.ColorConvertFloat4ToU32(Vector4.One),2);
+        drawList.AddLine(verticalU, verticalD, ImGui.ColorConvertFloat4ToU32(Vector4.One),2);
+
         UI.DrawRAlignedText($"FPS {(int)Graphics.FPS_SAMPLE}",
             position: new Vector2(WindowWidth, 10),
             color: Vector4.One,
@@ -240,7 +261,7 @@ public class Game : PhoenixGame
         _debugWindow.RenderUI();
 
         if(thit.Count > 0)
-            UI.DrawHCenteredText($"{thit[0].h.ToStrF2()}", new Vector2(WindowWidth/2, 0), Vector4.One, 20);
+            UI.DrawHCenteredText($"{thit.First().h.ToStrF2()}", new Vector2(WindowWidth/2, 0), Vector4.One, 20);
     }
     
     public void ValidateWindowSettings()

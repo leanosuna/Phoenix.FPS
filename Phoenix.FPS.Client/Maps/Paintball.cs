@@ -91,12 +91,14 @@ internal class Paintball
             ShaderModel.UseTex.Set(useTex);
             ShaderModel.Color.Set(Vector3.One);
             ShaderModel.Tex.Set(TexIndex(m));
+            ShaderModel.UvScale.Set(Vector2.One);
 
         }
         else
         {
             ShaderModel.UseTex.Set(true);
             ShaderModel.Tex.Set(TexIndex(-1));
+            ShaderModel.UvScale.Set(new Vector2(15f, 5f));
         }
 
     }
